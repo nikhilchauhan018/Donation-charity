@@ -1,0 +1,739 @@
+<div class="ngo-dashboard-container">
+  <!-- Header Section (Profile at Top - Full Width) -->
+  <div class="header-section">
+    <button class="mobile-menu-icon" aria-label="Open menu" (click)="toggleMobileMenu()">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+    </button>
+    <div class="profile-header">
+      <div class="profile-avatar">
+        <mat-icon class="avatar-icon">business</mat-icon>
+      </div>
+      <div class="header-actions" style="color: green;">
+        <app-notification-bell [userRole]="'NGO'"></app-notification-bell>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-body">
+    <aside class="sidebar" [class.mobile-open]="mobileMenuOpen">
+      <nav class="sidebar-nav">
+        <button 
+          class="nav-item" 
+          [class.active]="currentView === 'dashboard'"
+          (click)="showDashboard()">
+          <mat-icon>dashboard</mat-icon>
+          <span>Dashboard</span>
+        </button>
+        <button 
+          class="nav-item" 
+          [class.active]="currentView === 'profile'"
+          (click)="showProfile()">
+          <mat-icon>person</mat-icon>
+          <span>Profile</span>
+        </button>
+        <button 
+          class="nav-item"
+          (click)="goToCreateRequest()">
+          <mat-icon>add_circle</mat-icon>
+          <span>Create Request</span>
+        </button>
+        <button 
+          class="nav-item"
+          (click)="goToRequests()">
+          <mat-icon>list</mat-icon>
+          <span>My Requests</span>
+        </button>
+        <button 
+          class="nav-item"
+          (click)="goToCreateBlog()">
+          <mat-icon>article</mat-icon>
+          <span>Create Blog</span>
+        </button>
+        <button 
+          class="nav-item"
+          [class.active]="showAllContributions && currentView === 'dashboard'"
+          (click)="showAllContributionsView()">
+          <mat-icon>people</mat-icon>
+          <span>All Donor Contributions</span>
+        </button>
+        <button 
+          class="nav-item"
+          routerLink="/leaderboard">
+          <mat-icon>emoji_events</mat-icon>
+          <span>Leaderboard</span>
+        </button>
+        <button 
+          class="nav-item"
+          (click)="openChangePassword()">
+          <mat-icon>lock</mat-icon>
+          <span>Change Password</span>
+        </button>
+        <button 
+          class="nav-item logout-item"
+          (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </nav>
+    </aside>
+    <div class="sidebar-backdrop" (click)="toggleMobileMenu()" [class.mobile-open]="mobileMenuOpen"></div>
+    <main class="main-content">
+      <div *ngIf="isLoading" class="loading-container">
+        <mat-spinner diameter="50"></mat-spinner>
+        <p>Loading...</p>
+      </div>
+      <div *ngIf="!isLoading && currentView === 'dashboard'" class="dashboard-view">
+        <section class="hero-section">
+          <div class="hero-content">
+                <div class="profile-info">
+                    <h1 class="profile-name">{{ dashboardData?.profile?.name || 'NGO' }}</h1>
+                </div>
+            <h1 class="hero-title">NGO Dashboard</h1>
+            <p class="hero-subtitle">Manage donations and track your impact</p>
+          </div>
+        </section>
+        <section class="stats-section">
+        <div class="stats-grid">
+          <!-- Real-Time Stats: Donation Requests -->
+          <mat-card class="stat-card real-time-stat">
+            <div class="stat-content">
+              <div class="stat-icon-wrapper stat-primary">
+                <mat-icon>campaign</mat-icon>
+              </div>
+              <div class="">
+                <div class="stat-label">Total Donation Requests</div>
+                <div class="stat-value">{{ realTimeStats.totalDonationRequests || 0 }}</div>
+              </div>
+            </div>
+          </mat-card>
+
+          <!-- Real-Time Stats: Total Donors -->
+          <mat-card class="stat-card real-time-stat">
+            <div class="stat-content">
+              <div class="stat-icon-wrapper stat-success">
+                <mat-icon>people</mat-icon>
+              </div>
+              <div class="">
+                <div class="stat-label">Total Donors</div>
+                <div class="stat-value">{{ realTimeStats.totalDonors || 0 }}</div>
+              </div>
+            </div>
+          </mat-card>
+        </div>
+      </section>
+
+      <!-- Charts Section - Analytics -->
+      <section class="charts-section" *ngIf="getBreakdownItems().length > 0">
+        <div class="charts-grid">
+        <mat-card class="chart-card">
+          <h3 class="chart-title">Donation Types Distribution</h3>
+          <div class="donut-chart-container">
+            <svg class="donut-chart" viewBox="0 0 200 200">
+              <circle cx="100" cy="100" r="80" fill="none" stroke="#334155" stroke-width="40"/>
+              <circle *ngFor="let item of getBreakdownItems(); let i = index" 
+                      [attr.cx]="100" [attr.cy]="100" r="80" 
+                      fill="none" 
+                      [attr.stroke]="['#10B981', '#3B82F6', '#FBBF24', '#8B5CF6', '#EF4444'][i % 5]"
+                      stroke-width="40"
+                      [attr.stroke-dasharray]="(item.count / donationSummary.totalDonations) * 502.65 + ' 502.65'"
+                      [attr.stroke-dashoffset]="getDonutOffset(i)"
+                      transform="rotate(-90 100 100)"/>
+            </svg>
+            <div class="donut-chart-center">
+              <span class="donut-center-value">{{ donationSummary.totalDonations || 0 }}</span>
+              <span class="donut-center-label">Total</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item" *ngFor="let item of getBreakdownItems(); let i = index">
+              <span class="legend-color" [style.background-color]="['#10B981', '#3B82F6', '#FBBF24', '#8B5CF6', '#EF4444'][i % 5]"></span>
+              <span>{{ item.type }} ({{ item.count }})</span>
+            </div>
+          </div>
+        </mat-card>
+        <mat-card class="chart-card">
+          <h3 class="chart-title">Monthly Donations Trend</h3>
+          <div class="line-chart-container">
+            <svg viewBox="0 0 600 300" style="width: 100%; height: 100%;">
+              <line x1="50" y1="50" x2="50" y2="250" stroke="#475569" stroke-width="1"/>
+              <line x1="50" y1="250" x2="550" y2="250" stroke="#475569" stroke-width="1"/>
+              <polyline *ngIf="getMonthlyDonationData().data.length > 0"
+                        [attr.points]="getLineChartPoints()"
+                        fill="none"
+                        stroke="#10B981"
+                        stroke-width="3"
+                        stroke-linecap="round"/>
+              <polygon *ngIf="getMonthlyDonationData().data.length > 0"
+                       [attr.points]="getLineChartAreaPoints()"
+                       fill="url(#gradient)"
+                       opacity="0.3"/>
+              <defs>
+                <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" style="stop-color:#10B981;stop-opacity:0.5" />
+                  <stop offset="100%" style="stop-color:#10B981;stop-opacity:0" />
+                </linearGradient>
+              </defs>
+              <circle *ngFor="let point of getLineChartDataPoints()"
+                      [attr.cx]="point.x"
+                      [attr.cy]="point.y"
+                      r="5"
+                      fill="#10B981"/>
+              <text *ngFor="let label of getMonthlyDonationData().labels; let i = index"
+                    [attr.x]="50 + (i * 83.33) + 41.66"
+                    [attr.y]="270"
+                    fill="#94A3B8"
+                    font-size="12"
+                    text-anchor="middle">{{ label }}</text>
+            </svg>
+          </div>
+        </mat-card>
+        </div>
+      </section>
+      <section class="customer-table-card" *ngIf="getTopDonors().length > 0">
+        <h2 class="section-title">Top Donors</h2>
+        <table class="customer-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Contributions</th>
+              <th>Total Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let donor of getTopDonors()">
+              <td>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div class="customer-avatar">{{ donor.name.charAt(0).toUpperCase() }}</div>
+                  <div>
+                    <div style="font-weight: 600; color: var(--text-primary);">{{ donor.name }}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">{{ donor.email }}</div>
+                  </div>
+                </div>
+              </td>
+              <td style="font-weight: 600; color: var(--text-primary);">{{ donor.contributions }}</td>
+              <td style="font-weight: 600; color: var(--green-primary);">{{ formatCurrency(donor.totalAmount) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="summary-section">
+        <h2 class="section-title">Donation Summary</h2>
+        <div class="summary-grid">
+          <mat-card class="summary-card">
+            <div class="summary-content">
+              <div class="summary-icon-wrapper summary-primary">
+                <mat-icon>people</mat-icon>
+              </div>
+              <div class="summary-info">
+                <div class="summary-label">Total Donors</div>
+                <div class="summary-value">{{ donationSummary.totalDonors || 0 }}</div>
+              </div>
+            </div>
+          </mat-card>
+
+          <mat-card class="summary-card">
+            <div class="summary-content">
+              <div class="summary-icon-wrapper summary-success">
+                <mat-icon>inventory</mat-icon>
+              </div>
+              <div class="summary-info">
+                <div class="summary-label">Total Donations</div>
+                <div class="summary-value">{{ donationSummary.totalDonations || 0 }}</div>
+              </div>
+            </div>
+          </mat-card>
+          <mat-card class="summary-card">
+            <div class="summary-content">
+              <div class="summary-icon-wrapper summary-success">
+                <mat-icon>account_balance_wallet</mat-icon>
+              </div>
+              <div class="summary-info">
+                <div class="summary-label">Funds Received</div>
+                <div class="summary-value">₹{{ (donationSummary.fundsReceived || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+              </div>
+            </div>
+          </mat-card>
+          <mat-card class="summary-card">
+            <div class="summary-content">
+              <div class="summary-icon-wrapper summary-warning">
+                <mat-icon>pending</mat-icon>
+              </div>
+              <div class="summary-info">
+                <div class="summary-label">Funds Pending</div>
+                <div class="summary-value">₹{{ (donationSummary.fundsPending || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
+              </div>
+            </div>
+          </mat-card>
+        </div>
+        <mat-card class="breakdown-card">
+          <h3 class="breakdown-title">Donation Breakdown by Type</h3>
+          <div class="breakdown-list">
+            <div class="breakdown-item" *ngFor="let item of getBreakdownItems()">
+              <div class="breakdown-type">
+                <mat-icon class="breakdown-icon">{{ getDonationTypeIcon(item.type) }}</mat-icon>
+                <span class="breakdown-type-name">{{ item.type }}</span>
+              </div>
+              <div class="breakdown-stats">
+                <span class="breakdown-count">{{ item.count }} donations</span>
+                <span class="breakdown-total">{{ item.total > 0 ? (item.type === 'MONEY' || item.type === 'FUNDS' ? '₹' + item.total.toLocaleString('en-IN') : item.total.toLocaleString('en-IN')) : '0' }}</span>
+              </div>
+            </div>
+          </div>
+        </mat-card>
+      </section>
+      <section class="activity-section" *ngIf="dashboardData?.recentDonations?.length > 0">
+        <h2 class="section-title">Recent Donation Requests</h2>
+        <mat-card class="activity-card">
+          <mat-card-content>
+            <div class="activity-list">
+              <div *ngFor="let donation of dashboardData.recentDonations" class="activity-item">
+                <div class="activity-icon">
+                  <mat-icon>inventory_2</mat-icon>
+                </div>
+                <div class="activity-details">
+                  <div class="activity-title">{{ donation.purpose || donation.donation_category }}</div>
+                  <div class="activity-meta">
+                    <span class="activity-status" [class]="'status-' + donation.status?.toLowerCase()">
+                      {{ donation.status }}
+                    </span>
+                    <span class="activity-date">{{ formatDate(donation.created_at) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </section>
+      <section id="all-donor-contributions" class="donations-section" *ngIf="showAllContributions">
+        <h2 class="section-title">All Donor Contributions</h2>
+        <div *ngIf="isLoadingDonations" class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Loading donations...</p>
+        </div>
+        <div *ngIf="!isLoadingDonations && donationDetails.length === 0" class="empty-state">
+          <mat-icon class="empty-icon">inbox</mat-icon>
+          <p>No donations received yet</p>
+        </div>
+        <div *ngIf="!isLoadingDonations && donationDetails.length > 0" class="donations-list">
+          <mat-card class="donation-item" *ngFor="let donation of donationDetails; trackBy: trackByContributionId">
+            <div class="donation-header">
+              <div class="donor-info">
+                <mat-icon class="donor-avatar">person</mat-icon>
+                <div class="donor-details">
+                  <div class="donor-name">{{ donation.donor?.name || 'Anonymous Donor' }}</div>
+                  <div class="donor-contact">
+                    <span *ngIf="donation.donor?.email">
+                      <mat-icon class="contact-icon">email</mat-icon>
+                      {{ donation.donor.email }}
+                    </span>
+                    <span *ngIf="donation.donor?.contact || donation.donor?.phone" class="donor-phone">
+                      <mat-icon class="contact-icon">phone</mat-icon>
+                      {{ donation.donor?.contact || donation.donor?.phone }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div class="donation-status-actions">
+                <div class="current-status-badge" [class]="'status-' + (donation.status || 'PENDING').toLowerCase().replace('_', '-')">
+                  {{ getStatusLabel(donation.status || 'PENDING') }}
+                </div>
+                
+                <!-- Action Buttons - Only show if status is PENDING and not currently updating -->
+                <div *ngIf="(donation.status || 'PENDING').toUpperCase() === 'PENDING' && !updatingStatus[donation.contributionId]" class="status-action-buttons">
+                  <button 
+                    mat-raised-button 
+                    color="primary" 
+                    class="status-btn received-btn"
+                    (click)="updateContributionStatus(donation.contributionId, 'ACCEPTED')">
+                    <mat-icon>check_circle</mat-icon>
+                    Mark as Received
+                  </button>
+                  <button 
+                    mat-stroked-button 
+                    color="warn" 
+                    class="status-btn not-received-btn"
+                    (click)="updateContributionStatus(donation.contributionId, 'NOT_RECEIVED')">
+                    <mat-icon>cancel</mat-icon>
+                    Mark as Not Received
+                  </button>
+                </div>
+                
+                <!-- Loading Spinner - Show while updating -->
+                <mat-spinner 
+                  *ngIf="updatingStatus[donation.contributionId]"
+                  diameter="24"
+                  class="status-update-spinner">
+                </mat-spinner>
+              </div>
+            </div>
+            <div class="donation-body">
+              <div class="donation-info-row">
+                <div class="info-item">
+                  <mat-icon class="info-icon">category</mat-icon>
+                  <span class="info-label">Type:</span>
+                  <span class="info-value">{{ donation.donationType }}</span>
+                </div>
+                <div class="info-item">
+                  <mat-icon class="info-icon">scale</mat-icon>
+                  <span class="info-label">{{ getQuantityOrAmountLabel(donation.donationType) }}:</span>
+                  <span class="info-value">
+                    {{ getFormattedQuantityOrAmount(donation.quantityOrAmount, donation.donationType) }}
+                  </span>
+                </div>
+                <div class="info-item">
+                  <mat-icon class="info-icon">event</mat-icon>
+                  <span class="info-label">Date:</span>
+                  <span class="info-value">{{ formatDateTime(donation.donationDate) }}</span>
+                </div>
+              </div>
+              <div class="donation-info-row" *ngIf="donation.pickupLocation || donation.pickupDate">
+                <div class="info-item" *ngIf="donation.pickupLocation">
+                  <mat-icon class="info-icon">location_on</mat-icon>
+                  <span class="info-label">Pickup Location:</span>
+                  <span class="info-value">{{ donation.pickupLocation }}</span>
+                </div>
+                <div class="info-item" *ngIf="donation.pickupDate || donation.pickupTime">
+                  <mat-icon class="info-icon">access_time</mat-icon>
+                  <span class="info-label">Pickup Time:</span>
+                  <span class="info-value">
+                    <span *ngIf="donation.pickupDate">{{ formatDate(donation.pickupDate) }}</span>
+                    <span *ngIf="donation.pickupTime"> at {{ formatTime(donation.pickupTime) }}</span>
+                  </span>
+                </div>
+              </div>
+              <div class="donation-notes" *ngIf="donation.notes">
+                <mat-icon class="notes-icon">note</mat-icon>
+                <span class="notes-text">{{ donation.notes }}</span>
+              </div>
+            </div>
+          </mat-card>
+        </div>
+      </section>
+      <section class="donations-section" *ngIf="!showAllContributions">
+        <h2 class="section-title">Recent Donor Contributions</h2>
+        <div *ngIf="isLoadingDonations" class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Loading donations...</p>
+        </div>
+        <div *ngIf="!isLoadingDonations && getRecentDonationDetails().length === 0" class="empty-state">
+          <mat-icon class="empty-icon">inbox</mat-icon>
+          <p>No recent donations (last 3 days)</p>
+        </div>
+        <div *ngIf="!isLoadingDonations && getRecentDonationDetails().length > 0" class="donations-list">
+          <mat-card class="donation-item" *ngFor="let donation of getRecentDonationDetails(); trackBy: trackByContributionId">
+            <div class="donation-header">
+              <div class="donor-info">
+                <mat-icon class="donor-avatar">person</mat-icon>
+                <div class="donor-details">
+                  <div class="donor-name">{{ donation.donor?.name || 'Anonymous Donor' }}</div>
+                  <div class="donor-contact">
+                    <span *ngIf="donation.donor?.email">
+                      <mat-icon class="contact-icon">email</mat-icon>
+                      {{ donation.donor.email }}
+                    </span>
+                    <span *ngIf="donation.donor?.contact || donation.donor?.phone" class="donor-phone">
+                      <mat-icon class="contact-icon">phone</mat-icon>
+                      {{ donation.donor?.contact || donation.donor?.phone }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div class="donation-status-actions">
+                <div class="current-status-badge" [class]="'status-' + (donation.status || 'PENDING').toLowerCase().replace('_', '-')">
+                  {{ getStatusLabel(donation.status || 'PENDING') }}
+                </div>
+                
+                <!-- Action Buttons - Only show if status is PENDING and not currently updating -->
+                <div *ngIf="(donation.status || 'PENDING').toUpperCase() === 'PENDING' && !updatingStatus[donation.contributionId]" class="status-action-buttons">
+                  <button 
+                    mat-raised-button 
+                    color="primary" 
+                    class="status-btn received-btn"
+                    (click)="updateContributionStatus(donation.contributionId, 'ACCEPTED')">
+                    <mat-icon>check_circle</mat-icon>
+                    Mark as Received
+                  </button>
+                  <button 
+                    mat-stroked-button 
+                    color="warn" 
+                    class="status-btn not-received-btn"
+                    (click)="updateContributionStatus(donation.contributionId, 'NOT_RECEIVED')">
+                    <mat-icon>cancel</mat-icon>
+                    Mark as Not Received
+                  </button>
+                </div>
+                
+                <!-- Loading Spinner - Show while updating -->
+                <mat-spinner 
+                  *ngIf="updatingStatus[donation.contributionId]"
+                  diameter="24"
+                  class="status-update-spinner">
+                </mat-spinner>
+              </div>
+            </div>
+            <div class="donation-body">
+              <div class="donation-info-row">
+                <div class="info-item">
+                  <mat-icon class="info-icon">category</mat-icon>
+                  <span class="info-label">Type:</span>
+                  <span class="info-value">{{ donation.donationType }}</span>
+                </div>
+                <div class="info-item">
+                  <mat-icon class="info-icon">scale</mat-icon>
+                  <span class="info-label">{{ getQuantityOrAmountLabel(donation.donationType) }}:</span>
+                  <span class="info-value">
+                    {{ getFormattedQuantityOrAmount(donation.quantityOrAmount, donation.donationType) }}
+                  </span>
+                </div>
+                <div class="info-item">
+                  <mat-icon class="info-icon">event</mat-icon>
+                  <span class="info-label">Date:</span>
+                  <span class="info-value">{{ formatDateTime(donation.donationDate) }}</span>
+                </div>
+              </div>
+              <div class="donation-info-row" *ngIf="donation.pickupLocation">
+                <div class="info-item">
+                  <mat-icon class="info-icon">location_on</mat-icon>
+                  <span class="info-label">Pickup Location:</span>
+                  <span class="info-value">{{ donation.pickupLocation }}</span>
+                </div>
+                <div class="info-item" *ngIf="donation.pickupDate && donation.pickupTime">
+                  <mat-icon class="info-icon">schedule</mat-icon>
+                  <span class="info-label">Pickup Time:</span>
+                  <span class="info-value">{{ formatDate(donation.pickupDate) }} at {{ donation.pickupTime }}</span>
+                </div>
+              </div>
+              <div class="donation-notes" *ngIf="donation.notes">
+                <mat-icon class="notes-icon">note</mat-icon>
+                <span>{{ donation.notes }}</span>
+              </div>
+            </div>
+          </mat-card>
+        </div>
+      </section>
+    </div>
+    <div *ngIf="!isLoading && currentView === 'profile' && dashboardData?.profile" class="profile-view">
+      <div class="profile-container">
+        <mat-card class="profile-card-unified">
+          <div class="profile-header-content">
+            <div class="profile-avatar-large">
+              <mat-icon>business</mat-icon>
+            </div>
+            <div class="profile-header-info">
+              <h1 class="profile-name">{{ dashboardData.profile.name || 'NGO Name' }}</h1>
+              <p class="profile-id">NGO ID: {{ dashboardData.profile.ngo_id || dashboardData.profile.id || 'N/A' }}</p>
+              <div class="profile-badges">
+                <mat-chip 
+                  [class.verified-chip]="dashboardData.profile.verified" 
+                  [class.pending-chip]="!dashboardData.profile.verified"
+                  class="verification-chip">
+                  <mat-icon>{{ dashboardData.profile.verified ? 'verified' : 'pending' }}</mat-icon>
+                  {{ dashboardData.profile.verified ? 'Verified' : 'Pending Verification' }}
+                </mat-chip>
+                <mat-chip 
+                  *ngIf="hasPendingProfileUpdates"
+                  class="pending-update-chip">
+                  <mat-icon>pending</mat-icon>
+                  Profile Update Pending
+                </mat-chip>
+              </div>
+            </div>
+            <div class="profile-actions-header">
+              <button 
+                mat-raised-button 
+                color="primary" 
+                *ngIf="!isEditingProfile"
+                (click)="toggleProfileEdit()">
+                <mat-icon>edit</mat-icon>
+                Edit Profile
+              </button>
+              <button 
+                mat-button 
+                *ngIf="isEditingProfile"
+                (click)="cancelProfileEdit()">
+                <mat-icon>close</mat-icon>
+                Cancel
+              </button>
+            </div>
+          </div>
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>info</mat-icon>
+              Organization Information
+            </mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div *ngIf="!isEditingProfile" class="profile-details-view">
+              <div class="detail-row">
+                <div class="detail-label">
+                  <mat-icon>description</mat-icon>
+                  <span>Registration Number</span>
+                </div>
+                <div class="detail-value">{{ dashboardData.profile.registrationNumber || 'N/A' }}</div>
+              </div>
+
+              <div class="detail-row">
+                <div class="detail-label">
+                  <mat-icon>email</mat-icon>
+                  <span>Email</span>
+                </div>
+                <div class="detail-value">{{ dashboardData.profile.email || 'Not provided' }}</div>
+              </div>
+
+              <div class="detail-row" *ngIf="dashboardData.profile.contactPersonName">
+                <div class="detail-label">
+                  <mat-icon>person</mat-icon>
+                  <span>Contact Person</span>
+                </div>
+                <div class="detail-value">{{ dashboardData.profile.contactPersonName }}</div>
+              </div>
+
+              <div class="detail-row">
+                <div class="detail-label">
+                  <mat-icon>phone</mat-icon>
+                  <span>Phone Number</span>
+                </div>
+                <div class="detail-value">{{ dashboardData.profile.phoneNumber || dashboardData.profile.contactInfo || 'Not provided' }}</div>
+              </div>
+
+              <div class="detail-row">
+                <div class="detail-label">
+                  <mat-icon>location_on</mat-icon>
+                  <span>Address</span>
+                </div>
+                <div class="detail-value">
+                  <div>{{ dashboardData.profile.address || 'Not provided' }}</div>
+                  <div *ngIf="dashboardData.profile.city || dashboardData.profile.state || dashboardData.profile.pincode" class="address-details">
+                    {{ dashboardData.profile.city }}{{ dashboardData.profile.city && dashboardData.profile.state ? ', ' : '' }}{{ dashboardData.profile.state }}{{ dashboardData.profile.pincode ? ' - ' + dashboardData.profile.pincode : '' }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="detail-row" *ngIf="dashboardData.profile.websiteUrl">
+                <div class="detail-label">
+                  <mat-icon>language</mat-icon>
+                  <span>Website</span>
+                </div>
+                <div class="detail-value">
+                  <a [href]="dashboardData.profile.websiteUrl" target="_blank" rel="noopener noreferrer">
+                    {{ dashboardData.profile.websiteUrl }}
+                  </a>
+                </div>
+              </div>
+
+              <div class="detail-row" *ngIf="dashboardData.profile.aboutNgo">
+                <div class="detail-label">
+                  <mat-icon>info</mat-icon>
+                  <span>About NGO</span>
+                </div>
+                <div class="detail-value">{{ dashboardData.profile.aboutNgo }}</div>
+              </div>
+            </div>
+            <form *ngIf="isEditingProfile" (ngSubmit)="saveProfileUpdate()" class="profile-edit-form">
+              <div class="form-grid">
+                <mat-form-field appearance="outline" class="form-field-full">
+                  <mat-label>NGO Name *</mat-label>
+                  <input matInput [(ngModel)]="profileForm.name" name="name" required>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>Contact Person Name</mat-label>
+                  <input matInput [(ngModel)]="profileForm.contactPersonName" name="contactPersonName">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>Phone Number</mat-label>
+                  <input matInput [(ngModel)]="profileForm.phoneNumber" name="phoneNumber" type="tel">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="form-field-full">
+                  <mat-label>Address</mat-label>
+                  <textarea matInput [(ngModel)]="profileForm.address" name="address" rows="2"></textarea>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>City</mat-label>
+                  <input matInput [(ngModel)]="profileForm.city" name="city">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>State</mat-label>
+                  <input matInput [(ngModel)]="profileForm.state" name="state">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>Pincode</mat-label>
+                  <input matInput [(ngModel)]="profileForm.pincode" name="pincode">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="form-field-full">
+                  <mat-label>Website URL</mat-label>
+                  <input matInput [(ngModel)]="profileForm.websiteUrl" name="websiteUrl" type="url">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="form-field-full">
+                  <mat-label>About NGO</mat-label>
+                  <textarea matInput [(ngModel)]="profileForm.aboutNgo" name="aboutNgo" rows="4"></textarea>
+                </mat-form-field>
+              </div>
+
+              <div class="form-actions">
+                <button mat-raised-button color="primary" type="submit" [disabled]="isSavingProfile">
+                  <mat-icon>save</mat-icon>
+                  {{ isSavingProfile ? 'Saving...' : 'Save Changes' }}
+                </button>
+                <button mat-button type="button" (click)="cancelProfileEdit()">
+                  <mat-icon>close</mat-icon>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </div>
+    <div *ngIf="!isLoading && currentView === 'profile' && !dashboardData?.profile" class="no-data-container">
+      <mat-card class="no-data-card">
+        <mat-card-content>
+          <mat-icon class="no-data-icon">info</mat-icon>
+          <h3>Profile data loading...</h3>
+          <p>If you just registered, please wait for admin verification.</p>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  </main>
+</div>
+<div *ngIf="changePasswordOpen" class="password-dialog-overlay" (click)="closeChangePassword()">
+  <mat-card class="password-dialog" (click)="$event.stopPropagation()">
+    <mat-card-header>
+      <mat-card-title>Change Password</mat-card-title>
+      <button mat-icon-button (click)="closeChangePassword()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </mat-card-header>
+    <mat-card-content>
+      <form (ngSubmit)="submitChangePassword()">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Old Password</mat-label>
+          <input matInput type="password" [(ngModel)]="pwOld" name="pwOld" required>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>New Password</mat-label>
+          <input matInput type="password" [(ngModel)]="pwNew" name="pwNew" required>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Confirm New Password</mat-label>
+          <input matInput type="password" [(ngModel)]="pwConfirm" name="pwConfirm" required>
+        </mat-form-field>
+        <div class="form-error" *ngIf="formError">{{ formError }}</div>
+        <div class="form-success" *ngIf="successMessage">{{ successMessage }}</div>
+        <div class="dialog-actions">
+          <button mat-raised-button color="primary" type="submit">Change Password</button>
+          <button mat-button type="button" (click)="closeChangePassword()">Cancel</button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>

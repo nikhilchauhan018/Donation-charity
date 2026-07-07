@@ -1,0 +1,219 @@
+<div class="donor-dashboard-container">
+  <!-- Header Section (Profile at Top - Full Width) -->
+  <div class="header-section">
+    <button class="mobile-menu-icon" aria-label="Open menu" (click)="toggleMobileMenu()">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+    </button>
+    <div class="profile-header">
+      <div class="profile-avatar">
+        <mat-icon class="avatar-icon">person</mat-icon>
+      </div>
+      <div class="profile-info">
+        <h1 class="profile-name">{{ dashboardData.profile?.name || 'Donor' }}</h1>
+        <div class="profile-meta">
+          <div class="meta-item">
+            <mat-icon class="meta-icon">schedule</mat-icon>
+            <span>Last donated {{ stats.lastDonated || 'Never' }}</span>
+          </div>
+          <div class="meta-item">
+            <mat-icon class="meta-icon">favorite</mat-icon>
+            <span>Donor for {{ stats.donorForMonths || 0 }} months</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-body">
+    <aside class="sidebar" [class.mobile-open]="mobileMenuOpen">
+      <nav class="sidebar-nav">
+        <button 
+          class="nav-item"
+          [class.active]="activeView === 'dashboard'"
+          (click)="showDashboard()">
+          <mat-icon>home</mat-icon>
+          <span>Dashboard</span>
+        </button>
+        <button 
+          class="nav-item"
+          [class.active]="activeView === 'history'"
+          (click)="showDonationHistory()">
+          <mat-icon>history</mat-icon>
+          <span>Donation History</span>
+        </button>
+        <button 
+          class="nav-item"
+          (click)="editProfile()">
+          <mat-icon>settings</mat-icon>
+          <span>Edit Profile</span>
+        </button>
+        <button 
+          class="nav-item logout-item"
+          (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </nav>
+    </aside>
+    <div class="sidebar-backdrop" (click)="toggleMobileMenu()" [class.mobile-open]="mobileMenuOpen"></div>
+    <main class="main-content">
+      <ng-container *ngIf="activeView === 'dashboard'">
+        <section class="stats-section">
+          <h2 class="section-title">
+            <mat-icon class="title-icon">bar_chart</mat-icon>
+            Your Giving Stats
+          </h2>
+          <div class="stats-cards">
+            <div class="stat-card">
+              <div class="stat-value">{{ stats.numberOfDonations || 0 }}</div>
+              <div class="stat-label">Number of<br/>Donations</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">₹{{ formatCurrency(stats.totalFunds) }}</div>
+              <div class="stat-label">Total<br/>Funds</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">
+                <div *ngIf="stats.donationTypes && stats.donationTypes.length > 0" class="donation-types-list">
+                  <div *ngFor="let type of stats.donationTypes" class="donation-type-item">
+                    <span>{{ getDonationTypeLabel(type.type) }}</span>
+                    <span>{{ type.count }}</span>
+                  </div>
+                </div>
+                <div *ngIf="!stats.donationTypes || stats.donationTypes.length === 0">0</div>
+              </div>
+              <div class="stat-label">Type of<br/>Donations</div>
+            </div>
+          </div>
+        </section>
+        <section class="donations-section">
+          <h2 class="section-title">
+            <mat-icon class="title-icon">calendar_view_week</mat-icon>
+            Recent Donations 
+          </h2>
+          
+          <div *ngIf="isLoadingContributions" class="loading">
+            Loading donations...
+          </div>
+          
+          <div *ngIf="!isLoadingContributions && recentDonations.length === 0" class="empty-state">
+            No donations in the last 3 days.
+          </div>
+
+          <div *ngIf="!isLoadingContributions && recentDonations.length > 0" class="donations-table-wrapper">
+            <div class="table-header">
+              <div class="header-cell">Donation</div>
+              <div class="header-cell">Form</div>
+              <div class="header-cell">Date</div>
+              <div class="header-cell">Status</div>
+            </div>
+            <div class="donations-table">
+              <div *ngFor="let donation of recentDonations" class="donation-row">
+                <div class="donation-cell">
+                  <div class="donation-amount">₹{{ formatCurrency(donation.quantityOrAmount || 0) }}</div>
+                  <div class="donation-id">ID: {{ donation.contributionId }}</div>
+                </div>
+                
+                <div class="donation-cell">
+                  <span class="donation-form">Donation Form</span>
+                </div>
+                
+                <div class="donation-cell">
+                  <div class="donation-date-primary">{{ formatDate(donation.contributionDate) }}</div>
+                  <div class="donation-date-secondary">{{ formatTime(donation.contributionDate) }}</div>
+                </div>
+                
+                <div class="donation-cell">
+                  <div class="status-section">
+                    <div class="status-indicator">
+                      <span class="status-dot" [class]="'status-dot-' + getStatusClass(donation.status)"></span>
+                      <span class="status-text">{{ getStatusText(donation.status) }}</span>
+                    </div>
+                    <button class="view-receipt-btn" (click)="viewReceipt(donation)">
+                      View Receipt
+                      <mat-icon class="receipt-icon">arrow_forward</mat-icon>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </ng-container>
+      <ng-container *ngIf="activeView === 'history'">
+        <section class="donations-section">
+          <h2 class="section-title">
+            <mat-icon class="title-icon">history</mat-icon>
+            All Donation History
+          </h2>
+          
+          <div *ngIf="isLoadingContributions" class="loading">
+            Loading donation history...
+          </div>
+          
+          <div *ngIf="!isLoadingContributions && allDonations.length === 0" class="empty-state">
+            No donation history available.
+          </div>
+
+          <div *ngIf="!isLoadingContributions && allDonations.length > 0" class="donations-table-wrapper">
+            <div class="table-header">
+              <div class="header-cell">Donation</div>
+              <div class="header-cell">Form</div>
+              <div class="header-cell">Date</div>
+              <div class="header-cell">Status</div>
+            </div>
+            <div class="donations-table">
+              <div *ngFor="let donation of allDonations" class="donation-row">
+                <div class="donation-cell">
+                  <div class="donation-amount">₹{{ formatCurrency(donation.quantityOrAmount || 0) }}</div>
+                  <div class="donation-id">ID: {{ donation.contributionId }}</div>
+                </div>
+                
+                <div class="donation-cell">
+                  <span class="donation-form">Donation Form</span>
+                </div>
+                
+                <div class="donation-cell">
+                  <div class="donation-date-primary">{{ formatDate(donation.contributionDate) }}</div>
+                  <div class="donation-date-secondary">{{ formatTime(donation.contributionDate) }}</div>
+                </div>
+                
+                <div class="donation-cell">
+                  <div class="status-section">
+                    <div class="status-indicator">
+                      <span class="status-dot" [class]="'status-dot-' + getStatusClass(donation.status)"></span>
+                      <span class="status-text">{{ getStatusText(donation.status) }}</span>
+                    </div>
+                    <button class="view-receipt-btn" (click)="viewReceipt(donation)">
+                      View Receipt
+                      <mat-icon class="receipt-icon">arrow_forward</mat-icon>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </ng-container>
+    </main>
+  </div>
+  <div *ngIf="isEditingProfile" class="edit-profile-overlay" (click)="isEditingProfile = false">
+    <div class="edit-profile-dialog" (click)="$event.stopPropagation()">
+      <h3>Edit Profile</h3>
+      <div class="edit-form">
+        <input placeholder="Name" [(ngModel)]="profileForm.name" />
+        <input placeholder="Email" [(ngModel)]="profileForm.email" disabled />
+        <input placeholder="Contact Info" [(ngModel)]="profileForm.contactInfo" />
+        <input placeholder="Phone Number" [(ngModel)]="profileForm.phoneNumber" />
+        <input placeholder="Full Address" [(ngModel)]="profileForm.fullAddress" />
+        <input placeholder="New Password (leave blank to keep)" type="password" [(ngModel)]="profileForm.password" />
+        <div class="edit-actions">
+          <button class="btn-primary" (click)="saveProfile()">Save</button>
+          <button class="btn-secondary" (click)="isEditingProfile = false">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

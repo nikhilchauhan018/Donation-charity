@@ -1,0 +1,237 @@
+
+<header class="navbar">
+  <div class="nav-container">
+    <div class="logo-section">
+      <div class="logo">
+        <img src="assets/icons/donation.png" alt="Donation Logo" class="logo-icon" />
+
+        <h1>Donation</h1>
+      </div>
+      <p class="tagline">Help Others, Be Happy!</p>
+    </div>
+    <nav class="nav-menu" [class.menu-open]="menuOpen">
+      <a routerLink="/" class="nav-link" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">HOME</a>
+      <a routerLink="/about" class="nav-link" routerLinkActive="active">ABOUT</a>
+      <a routerLink="/blog" class="nav-link" routerLinkActive="active">BLOG</a>
+      <div class="nav-dropdown">
+        <a routerLink="/donations" class="nav-link" routerLinkActive="active">DONATION <span class="dropdown-arrow">▼</span></a>
+        <div class="dropdown-menu">
+          <a routerLink="/donations" class="dropdown-item">Browse All Donations</a>
+          <a routerLink="/donations" [queryParams]="{category: 'FOOD'}" class="dropdown-item">Food Donations</a>
+          <a routerLink="/donations" [queryParams]="{category: 'CLOTHES'}" class="dropdown-item">Clothes Donations</a>
+          <a routerLink="/donations" [queryParams]="{category: 'FUNDS'}" class="dropdown-item">Funds Donations</a>
+        </div>
+      </div>
+      <a routerLink="/leaderboard" class="nav-link" routerLinkActive="active">🏆 LEADERBOARD</a>
+    </nav>
+    <div class="nav-actions">
+      <button *ngIf="!isAuthenticated" class="btn-login" routerLink="/login">LOGIN</button>
+      <div *ngIf="isAuthenticated && userRole === 'DONOR'" class="profile-icon-container" (click)="navigateToDashboard()">
+        <div class="profile-icon">{{ userInitial }}</div>
+      </div>
+      <button *ngIf="isAuthenticated && userRole !== 'DONOR'" class="btn-donate" (click)="navigateToDashboard()">DASHBOARD</button>
+      <button class="menu-toggle" (click)="menuOpen = !menuOpen">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </div>
+</header>
+<section class="hero-section">
+  <div *ngIf="isLoadingSliders" class="hero-loading">
+    <p>Loading...</p>
+  </div>
+  <div *ngIf="!isLoadingSliders && sliders.length > 0" class="hero-slider">
+    <div 
+      *ngFor="let slider of sliders; let i = index" 
+      class="hero-slide" 
+      [class.active]="i === currentSlide"
+      [style.background-image]="'url(' + getSliderImageUrl(slider.image_url) + ')'">
+      <div class="hero-overlay"></div>
+      <div class="hero-content">
+        <p class="hero-tagline" *ngIf="slider.tagline">{{ slider.tagline }}</p>
+        <h1 class="hero-title">{{ slider.title }}</h1>
+        <p class="hero-description" *ngIf="slider.description">
+          {{ slider.description }}
+        </p>
+        <div class="hero-buttons" *ngIf="slider.button1_text || slider.button2_text">
+          <button *ngIf="slider.button1_text" class="btn-yellow" [routerLink]="slider.button1_link || '#'">
+            <span class="btn-icon">✓</span>
+            {{ slider.button1_text }}
+          </button>
+          <button *ngIf="slider.button2_text" class="btn-red" [routerLink]="slider.button2_link || '#'">
+            <span class="btn-icon">✓</span>
+            {{ slider.button2_text }}
+          </button>
+        </div>
+      </div>
+      <button class="carousel-prev" (click)="prevSlide()" *ngIf="sliders.length > 1">‹</button>
+      <button class="carousel-next" (click)="nextSlide()" *ngIf="sliders.length > 1">›</button>
+    </div>
+  </div>
+  <div *ngIf="!isLoadingSliders && sliders.length === 0" class="hero-slider">
+    <div class="hero-slide active">
+      <div class="hero-image">
+        <div class="hero-overlay"></div>
+      </div>
+      <div class="hero-content">
+        <p class="hero-tagline">Change the life Change the world</p>
+        <h1 class="hero-title">Every Good Act Is A Charity</h1>
+        <p class="hero-description">
+          There are many variations of passages available majority have suffered alteration in some form by injected humour or randomised words.
+        </p>
+        <div class="hero-buttons">
+          <button class="btn-yellow">
+            <span class="btn-icon">✓</span>
+            HOW WE HELP
+          </button>
+          <button class="btn-red">
+            <span class="btn-icon">✓</span>
+            SUPPORT US
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section id="about" class="about-section">
+  <div class="container">
+    <div class="section-header">
+      <h2>About Our Mission</h2>
+      <p>We connect donors with verified NGOs to create positive change in communities</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-card">
+        <div class="about-icon">💝</div>
+        <h3>Transparent Donations</h3>
+        <p>Every donation is tracked and verified to ensure it reaches those in need.</p>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">🤝</div>
+        <h3>Verified NGOs</h3>
+        <p>All NGOs are verified and regularly audited to maintain trust and transparency.</p>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">📍</div>
+        <h3>Local Impact</h3>
+        <p>Find and support causes in your local community for maximum impact.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="stats-section">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-number">{{ stats.totalDonations }}</div>
+        <div class="stat-label">Total Donations</div>
+      </div>
+      <!-- <div class="stat-item">
+        <div class="stat-number">{{ stats.totalContributions }}</div>
+        <div class="stat-label">Contributions</div>
+      </div> -->
+      <div class="stat-item">
+        <div class="stat-number">{{ stats.activeNGOs }}</div>
+        <div class="stat-label">Active NGOs</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">{{ stats.activeDonors }}</div>
+        <div class="stat-label">Active Donors</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="donations-section">
+  <div class="container">
+    <div class="section-header">
+      <h2>Recent Donation Requests</h2>
+      <p>Help make a difference today</p>
+    </div>
+    <div *ngIf="recentDonations.length > 0" class="donations-grid">
+      <div class="donation-card" *ngFor="let donation of recentDonations">
+        <h3>{{ donation.description || donation.donation_type }}</h3>
+        <p class="donation-category">{{ donation.donation_type }}</p>
+        <div class="donation-info">
+          <p><strong>🏢 NGO:</strong> {{ donation.ngo_name || 'N/A' }}</p>
+          <p><strong>📍 Address:</strong> {{ donation.ngo_address || 'Not specified' }}</p>
+          <p><strong>📦 Type:</strong> {{ donation.donation_type }}</p>
+          <p><strong>📊 {{ getQuantityOrAmountLabel(donation.donation_type) }}:</strong> {{ formatQuantityOrAmount(donation) }}</p>
+        </div>
+        <p class="donation-description">{{ donation.description || 'Help make a difference' }}</p>
+        <div class="donation-footer">
+          <button class="btn-donate-small" routerLink="/donations/{{ donation.id }}" *ngIf="isAuthenticated && userRole === 'DONOR'">Donate</button>
+          <button class="btn-donate-small" routerLink="/donations/{{ donation.id }}" *ngIf="!isAuthenticated || userRole !== 'DONOR'">View Details</button>
+        </div>
+      </div>
+    </div>
+    <div *ngIf="recentDonations.length === 0 && !isLoading" class="empty-donations">
+      <p>No donation requests available at the moment. Check back later!</p>
+      <button class="btn-yellow" routerLink="/donations">Browse All Donations</button>
+    </div>
+    <div class="section-actions" *ngIf="recentDonations.length > 0">
+      <button class="btn-primary" routerLink="/donations">View All Donations</button>
+    </div>
+  </div>
+</section>
+<section class="cta-section">
+  <div class="container">
+    <h2>Ready to Make a Difference?</h2>
+    <p>Join thousands of donors and NGOs working together to create positive change.</p>
+    <div class="cta-buttons">
+      <button *ngIf="!isAuthenticated" class="btn-yellow btn-large" routerLink="/signup">
+        <span class="btn-icon">✓</span>
+        GET STARTED
+      </button>
+      <button *ngIf="isAuthenticated" class="btn-yellow btn-large" routerLink="/donations">
+        <span class="btn-icon">✓</span>
+        BROWSE DONATIONS
+      </button>
+    </div>
+  </div>
+</section>
+<footer class="footer">
+  <div class="container">
+    <div class="footer-content">
+      <div class="footer-section">
+        <div class="footer-logo">
+          <img src="assets/icons/donation.png" alt="Donation Logo" class="footer-logo-icon" />
+
+          <h3>Donation</h3>
+        </div>
+        <p>Connecting donors with verified NGOs to create positive change in communities.</p>
+      </div>
+      <div class="footer-section">
+        <h4>Quick Links</h4>
+        <ul>
+          <li><a routerLink="/">Home</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a routerLink="/donations">Donations</a></li>
+          <li><a routerLink="/leaderboard">Leaderboard</a></li>
+          <li><a routerLink="/signup">Sign Up</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>For NGOs</h4>
+        <ul>
+          <li><a routerLink="/signup">Register as NGO</a></li>
+          <li><a routerLink="/dashboard/ngo" *ngIf="isAuthenticated">NGO Dashboard</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Support</h4>
+        <ul>
+          <li><a href="#">Help Center</a></li>
+          <li><a href="#">Contact Us</a></li>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms of Service</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 Donation Portal. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+
