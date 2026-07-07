@@ -127,7 +127,7 @@ export const markAllNotificationsAsRead = async (req: AuthRequest, res: Response
       [userId, userType]
     );
 
-    return sendSuccess(res, { affectedRows }, 'All notifications marked as read');
+   return sendSuccess(res, { affectedRows: result }, 'All notifications marked as read');
   } catch (error: any) {
     console.error('[Notification Controller] Error marking all notifications as read:', error);
     return res.status(500).json({
