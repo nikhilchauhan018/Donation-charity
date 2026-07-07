@@ -8,6 +8,16 @@ export interface AuthRequest extends Request {
     role: 'DONOR' | 'NGO' | 'ADMIN';
     email: string;
   };
+
+  body: any;
+  params: any;
+  query: any;
+  headers: any;
+  path: string;
+  method: string;
+
+  file?: any;
+  files?: any;
 }
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
