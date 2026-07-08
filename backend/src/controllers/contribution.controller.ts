@@ -1,63 +1,116 @@
-import { Request, Response } from 'express';
-import { Types } from 'mongoose';
-import { ContributionModel, ContributionStatus } from '../models/Contribution.model';
-import { DonationModel } from '../models/Donation.model';
+import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { query, queryOne, insert, update } from '../config/mysql';
 import { sendSuccess } from '../utils/response';
 
-const isFutureDate = (value: string | Date) => new Date(value).getTime() > Date.now();
+const toInt = (value: unknown) => Number.parseInt(String(value), 10);
+
+const isFutureDate = (value: string | Date) => {
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getTime() > Date.now();
+};
 
 export const createContribution = async (req: AuthRequest, res: Response) => {
+  const donorId = toInt(req.user!.id);
   const { donationId, notes, scheduledPickupTime } = req.body;
-  if (!donationId || !scheduledPickupTime) {
+
+  const donationIdNum = toInt(donationId);
+
+  if (!donationIdNum || !scheduledPickupTime) {
     return res.status(400).json({ success: false, message: 'Missing required fields' });
   }
-  if (!Types.ObjectId.isValid(donationId)) {
-    return res.status(400).json({ success: false, message: 'Invalid donation id' });
-  }
+
   if (!isFutureDate(scheduledPickupTime)) {
     return res.status(400).json({ success: false, message: 'Scheduled pickup must be in the future' });
   }
-  const donation = await DonationModel.findById(donationId);
+
+  const donation = await queryOne<any>('SELECT * FROM donations WHERE id = ?', [donationIdNum]);
+
   if (!donation) {
     return res.status(404).json({ success: false, message: 'Donation not found' });
   }
 
-  const contribution = await ContributionModel.create({
-    donationId,
-    donorId: req.user!.id,
-    notes,
-    scheduledPickupTime,
-  });
+  const existing = await queryOne<any>(
+    'SELECT id FROM contributions WHERE donation_id = ? AND donor_id = ?',
+    [donationIdNum, donorId]
+  );
 
-  const populated = await ContributionModel.findById(contribution._id)
-    .populate('donorId', 'name email contactInfo')
-    .populate('donationId');
+  if (existing) {
+    return res.status(409).json({ success: false, message: 'You have already contributed to this donation' });
+  }
 
-  return sendSuccess(res, populated, 'Contribution created', 201);
+  const donor = await queryOne<any>('SELECT * FROM donors WHERE id = ?', [donorId]);
+
+  if (!donor) {
+    return res.status(404).json({ success: false, message: 'Donor not found' });
+  }
+
+  const contributionId = await insert(
+    `INSERT INTO contributions 
+      (donation_id, donor_id, notes, scheduled_pickup_time, pickup_scheduled_date_time, donor_address, donor_contact_number, pickup_status, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', 'PENDING')`,
+    [
+      donationIdNum,
+      donorId,
+      notes || null,
+      new Date(scheduledPickupTime),
+      new Date(scheduledPickupTime),
+      donor.full_address || 'N/A',
+      donor.phone_number || donor.contact_info || 'N/A',
+    ]
+  );
+
+  const contribution = await queryOne<any>(
+    `SELECT c.*, d.name AS donor_name, d.email AS donor_email, dn.purpose, dn.description, dn.quantity_or_amount
+     FROM contributions c
+     JOIN donors d ON c.donor_id = d.id
+     JOIN donations dn ON c.donation_id = dn.id
+     WHERE c.id = ?`,
+    [contributionId]
+  );
+
+  return sendSuccess(res, contribution, 'Contribution created', 201);
 };
 
 export const getMyContributions = async (req: AuthRequest, res: Response) => {
-  const contributions = await ContributionModel.find({ donorId: req.user!.id })
-    .populate('donationId')
-    .sort({ createdAt: -1 });
+  const donorId = toInt(req.user!.id);
+
+  const contributions = await query<any>(
+    `SELECT c.*, dn.purpose, dn.description, dn.donation_category, dn.donation_type, dn.quantity_or_amount,
+            u.name AS ngo_name, u.email AS ngo_email
+     FROM contributions c
+     JOIN donations dn ON c.donation_id = dn.id
+     JOIN users u ON dn.ngo_id = u.id
+     WHERE c.donor_id = ?
+     ORDER BY c.created_at DESC`,
+    [donorId]
+  );
+
   return sendSuccess(res, contributions, 'My contributions');
 };
 
-export const getNgoContributions = async (req: AuthRequest, res: Response) => {
-  const donations = await DonationModel.find({ ngoId: req.user!.id }).select('_id');
-  const donationIds = donations.map((d) => d._id);
-  const contributions = await ContributionModel.find({ donationId: { $in: donationIds } })
-    .populate('donorId', 'name email contactInfo')
-    .populate('donationId')
-    .sort({ createdAt: -1 });
-  return sendSuccess(res, contributions, 'NGO contributions');
-};
-export const approveContribution = async (req: AuthRequest, res: Response) => {
-  const { id } = req.params;
-  const { status } = req.body as { status: ContributionStatus };
+export const getNgoContributions = async (req: AuthRequest, res: Response) => {
+  const ngoId = toInt(req.user!.id);
 
-  if (!Types.ObjectId.isValid(id)) {
+  const contributions = await query<any>(
+    `SELECT c.*, d.name AS donor_name, d.email AS donor_email, d.contact_info AS donor_contact_info,
+            dn.purpose, dn.description, dn.donation_category, dn.donation_type, dn.quantity_or_amount
+     FROM contributions c
+     JOIN donors d ON c.donor_id = d.id
+     JOIN donations dn ON c.donation_id = dn.id
+     WHERE dn.ngo_id = ?
+     ORDER BY c.created_at DESC`,
+    [ngoId]
+  );
+
+  return sendSuccess(res, contributions, 'NGO contributions');
+};
+
+export const approveContribution = async (req: AuthRequest, res: Response) => {
+  const id = toInt(req.params.id);
+  const { status } = req.body;
+
+  if (!id) {
     return res.status(400).json({ success: false, message: 'Invalid contribution id' });
   }
 
@@ -65,61 +118,67 @@ export const approveContribution = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ success: false, message: 'Invalid status. Use APPROVED, REJECTED, or COMPLETED' });
   }
 
-  const contribution = await ContributionModel.findById(id).populate('donationId');
+  const contribution = await queryOne<any>(
+    `SELECT c.*, dn.ngo_id, dn.id AS donation_id
+     FROM contributions c
+     JOIN donations dn ON c.donation_id = dn.id
+     WHERE c.id = ?`,
+    [id]
+  );
+
   if (!contribution) {
     return res.status(404).json({ success: false, message: 'Contribution not found' });
   }
 
-  const donation = contribution.donationId as any;
-  if (donation.ngoId.toString() !== req.user!.id && req.user!.role !== 'ADMIN') {
-    return res.status(403).json({ success: false, message: 'Forbidden: You can only approve contributions for your own donations' });
+  if (String(contribution.ngo_id) !== String(req.user!.id) && req.user!.role !== 'ADMIN') {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
   }
 
-  contribution.status = status;
-  await contribution.save();
+  await update('UPDATE contributions SET status = ? WHERE id = ?', [status, id]);
+
   if (status === 'APPROVED') {
-    await DonationModel.findByIdAndUpdate(donation._id, { status: 'CONFIRMED' });
+    await update('UPDATE donations SET status = ? WHERE id = ?', ['CONFIRMED', contribution.donation_id]);
   }
 
-  const updated = await ContributionModel.findById(id)
-    .populate('donorId', 'name email contactInfo')
-    .populate('donationId');
+  const updatedContribution = await queryOne<any>('SELECT * FROM contributions WHERE id = ?', [id]);
 
-  return sendSuccess(res, updated, `Contribution ${status.toLowerCase()}`);
-};
+  return sendSuccess(res, updatedContribution, `Contribution ${String(status).toLowerCase()}`);
+};
+
 export const updatePickupSchedule = async (req: AuthRequest, res: Response) => {
-  const { id } = req.params;
-  const { scheduledPickupTime } = req.body as { scheduledPickupTime: string | Date };
+  const id = toInt(req.params.id);
+  const { scheduledPickupTime } = req.body;
 
-  if (!Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ success: false, message: 'Invalid contribution id' });
-  }
-
-  if (!scheduledPickupTime) {
-    return res.status(400).json({ success: false, message: 'Missing scheduledPickupTime' });
+  if (!id || !scheduledPickupTime) {
+    return res.status(400).json({ success: false, message: 'Invalid request' });
   }
 
   if (!isFutureDate(scheduledPickupTime)) {
     return res.status(400).json({ success: false, message: 'Scheduled pickup must be in the future' });
   }
 
-  const contribution = await ContributionModel.findById(id).populate('donationId');
+  const contribution = await queryOne<any>(
+    `SELECT c.*, dn.ngo_id
+     FROM contributions c
+     JOIN donations dn ON c.donation_id = dn.id
+     WHERE c.id = ?`,
+    [id]
+  );
+
   if (!contribution) {
     return res.status(404).json({ success: false, message: 'Contribution not found' });
   }
 
-  const donation = contribution.donationId as any;
-  if (donation.ngoId.toString() !== req.user!.id && req.user!.role !== 'ADMIN') {
-    return res.status(403).json({ success: false, message: 'Forbidden: You can only update schedules for your own donations' });
+  if (String(contribution.ngo_id) !== String(req.user!.id) && req.user!.role !== 'ADMIN') {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
   }
 
-  contribution.scheduledPickupTime = new Date(scheduledPickupTime);
-  await contribution.save();
+  await update(
+    'UPDATE contributions SET scheduled_pickup_time = ?, pickup_scheduled_date_time = ? WHERE id = ?',
+    [new Date(scheduledPickupTime), new Date(scheduledPickupTime), id]
+  );
 
-  const updated = await ContributionModel.findById(id)
-    .populate('donorId', 'name email contactInfo')
-    .populate('donationId');
+  const updatedContribution = await queryOne<any>('SELECT * FROM contributions WHERE id = ?', [id]);
 
-  return sendSuccess(res, updated, 'Pickup schedule updated');
+  return sendSuccess(res, updatedContribution, 'Pickup schedule updated');
 };
-

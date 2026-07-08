@@ -1,141 +1,121 @@
 import { Request, Response } from 'express';
-import { ContributionModel } from '../models/Contribution.model';
-import { DonationModel } from '../models/Donation.model';
-import { UserModel } from '../models/User.model';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { query } from '../config/mysql';
 import { sendSuccess } from '../utils/response';
-export const getPlatformStats = async (req: Request, res: Response) => {
-  const [
-    totalDonors,
-    totalNgos,
-    totalDonations,
-    totalContributions,
-    totalAmountDonated,
-    pendingDonations,
-    completedDonations,
-    urgentDonations,
-  ] = await Promise.all([
-    UserModel.countDocuments({ role: 'DONOR' }),
-    UserModel.countDocuments({ role: 'NGO' }),
-    DonationModel.countDocuments(),
-    ContributionModel.countDocuments({ status: { $in: ['APPROVED', 'COMPLETED'] } }),
-    DonationModel.aggregate([
-      { $match: { status: 'COMPLETED' } },
-      { $group: { _id: null, total: { $sum: '$quantityOrAmount' } } },
-    ]),
-    DonationModel.countDocuments({ status: 'PENDING' }),
-    DonationModel.countDocuments({ status: 'COMPLETED' }),
-    DonationModel.countDocuments({ priority: 'URGENT', status: { $ne: 'COMPLETED' } }),
-  ]);
 
-  const stats = {
+export const getPlatformStats = async (req: Request, res: Response) => {
+  const donors = await query('SELECT COUNT(*) AS total FROM donors') as any[];
+  const ngos = await query('SELECT COUNT(*) AS total FROM users') as any[];
+  const donations = await query('SELECT COUNT(*) AS total FROM donations') as any[];
+  const contributions = await query(
+    "SELECT COUNT(*) AS total FROM contributions WHERE status IN ('APPROVED','COMPLETED')"
+  ) as any[];
+
+  const amount = await query(
+    "SELECT COALESCE(SUM(quantity_or_amount),0) AS total FROM donations WHERE status='COMPLETED'"
+  ) as any[];
+
+  const pending = await query("SELECT COUNT(*) AS total FROM donations WHERE status='PENDING'") as any[];
+  const completed = await query("SELECT COUNT(*) AS total FROM donations WHERE status='COMPLETED'") as any[];
+  const urgent = await query(
+    "SELECT COUNT(*) AS total FROM donations WHERE priority='URGENT' AND status!='COMPLETED'"
+  ) as any[];
+
+  return sendSuccess(res, {
     users: {
-      totalDonors,
-      totalNgos,
-      totalUsers: totalDonors + totalNgos,
+      totalDonors: donors[0]?.total || 0,
+      totalNgos: ngos[0]?.total || 0,
+      totalUsers: (donors[0]?.total || 0) + (ngos[0]?.total || 0)
     },
     donations: {
-      total: totalDonations,
-      pending: pendingDonations,
-      completed: completedDonations,
-      urgent: urgentDonations,
+      total: donations[0]?.total || 0,
+      pending: pending[0]?.total || 0,
+      completed: completed[0]?.total || 0,
+      urgent: urgent[0]?.total || 0
     },
     contributions: {
-      total: totalContributions,
-      totalAmountDonated: totalAmountDonated[0]?.total || 0,
-    },
-  };
-
-  return sendSuccess(res, stats, 'Platform stats fetched');
+      total: contributions[0]?.total || 0,
+      totalAmountDonated: amount[0]?.total || 0
+    }
+  }, 'Platform stats fetched');
 };
+
 export const getDonorStats = async (req: AuthRequest, res: Response) => {
   const donorId = req.user!.id;
 
-  const [
-    totalContributions,
-    approvedContributions,
-    completedContributions,
-    pendingContributions,
-    totalAmount,
-    recentContributions,
-  ] = await Promise.all([
-    ContributionModel.countDocuments({ donorId }),
-    ContributionModel.countDocuments({ donorId, status: 'APPROVED' }),
-    ContributionModel.countDocuments({ donorId, status: 'COMPLETED' }),
-    ContributionModel.countDocuments({ donorId, status: 'PENDING' }),
-    ContributionModel.aggregate([
-      { $match: { donorId: donorId, status: { $in: ['APPROVED', 'COMPLETED'] } } },
-      {
-        $lookup: {
-          from: 'donations',
-          localField: 'donationId',
-          foreignField: '_id',
-          as: 'donation',
-        },
-      },
-      { $unwind: '$donation' },
-      { $group: { _id: null, total: { $sum: '$donation.quantityOrAmount' } } },
-    ]),
-    ContributionModel.find({ donorId })
-      .populate('donationId')
-      .sort({ createdAt: -1 })
-      .limit(5),
-  ]);
+  const total = await query('SELECT COUNT(*) AS total FROM contributions WHERE donor_id=?', [donorId]) as any[];
+  const approved = await query("SELECT COUNT(*) AS total FROM contributions WHERE donor_id=? AND status='APPROVED'", [donorId]) as any[];
+  const completed = await query("SELECT COUNT(*) AS total FROM contributions WHERE donor_id=? AND status='COMPLETED'", [donorId]) as any[];
+  const pending = await query("SELECT COUNT(*) AS total FROM contributions WHERE donor_id=? AND status='PENDING'", [donorId]) as any[];
 
-  const stats = {
+  const amount = await query(`
+    SELECT COALESCE(SUM(d.quantity_or_amount),0) AS total
+    FROM contributions c
+    JOIN donations d ON c.donation_id=d.id
+    WHERE c.donor_id=? AND c.status IN ('APPROVED','COMPLETED')
+  `, [donorId]) as any[];
+
+  const recent = await query(`
+    SELECT c.*, d.purpose, d.description, d.donation_category, d.quantity_or_amount
+    FROM contributions c
+    JOIN donations d ON c.donation_id=d.id
+    WHERE c.donor_id=?
+    ORDER BY c.created_at DESC
+    LIMIT 5
+  `, [donorId]) as any[];
+
+  return sendSuccess(res, {
     contributions: {
-      total: totalContributions,
-      approved: approvedContributions,
-      completed: completedContributions,
-      pending: pendingContributions,
+      total: total[0]?.total || 0,
+      approved: approved[0]?.total || 0,
+      completed: completed[0]?.total || 0,
+      pending: pending[0]?.total || 0
     },
-    totalAmountContributed: totalAmount[0]?.total || 0,
-    recentContributions,
-  };
-
-  return sendSuccess(res, stats, 'Donor stats fetched');
+    totalAmountContributed: amount[0]?.total || 0,
+    recentContributions: recent
+  }, 'Donor stats fetched');
 };
+
 export const getNgoStats = async (req: AuthRequest, res: Response) => {
   const ngoId = req.user!.id;
 
-  const [
-    totalDonations,
-    pendingDonations,
-    confirmedDonations,
-    completedDonations,
-    totalContributions,
-    totalAmount,
-    recentDonations,
-  ] = await Promise.all([
-    DonationModel.countDocuments({ ngoId }),
-    DonationModel.countDocuments({ ngoId, status: 'PENDING' }),
-    DonationModel.countDocuments({ ngoId, status: 'CONFIRMED' }),
-    DonationModel.countDocuments({ ngoId, status: 'COMPLETED' }),
-    DonationModel.find({ ngoId }).select('_id').then((donations) => {
-      const donationIds = donations.map((d) => d._id);
-      return ContributionModel.countDocuments({ donationId: { $in: donationIds } });
-    }),
-    DonationModel.aggregate([
-      { $match: { ngoId: ngoId, status: 'COMPLETED' } },
-      { $group: { _id: null, total: { $sum: '$quantityOrAmount' } } },
-    ]),
-    DonationModel.find({ ngoId }).sort({ createdAt: -1 }).limit(5),
-  ]);
+  const total = await query('SELECT COUNT(*) AS total FROM donations WHERE ngo_id=?', [ngoId]) as any[];
+  const pending = await query("SELECT COUNT(*) AS total FROM donations WHERE ngo_id=? AND status='PENDING'", [ngoId]) as any[];
+  const confirmed = await query("SELECT COUNT(*) AS total FROM donations WHERE ngo_id=? AND status='CONFIRMED'", [ngoId]) as any[];
+  const completed = await query("SELECT COUNT(*) AS total FROM donations WHERE ngo_id=? AND status='COMPLETED'", [ngoId]) as any[];
 
-  const stats = {
+  const contributions = await query(`
+    SELECT COUNT(c.id) AS total
+    FROM contributions c
+    JOIN donations d ON c.donation_id=d.id
+    WHERE d.ngo_id=?
+  `, [ngoId]) as any[];
+
+  const amount = await query(`
+    SELECT COALESCE(SUM(quantity_or_amount),0) AS total
+    FROM donations
+    WHERE ngo_id=? AND status='COMPLETED'
+  `, [ngoId]) as any[];
+
+  const recent = await query(`
+    SELECT *
+    FROM donations
+    WHERE ngo_id=?
+    ORDER BY created_at DESC
+    LIMIT 5
+  `, [ngoId]) as any[];
+
+  return sendSuccess(res, {
     donations: {
-      total: totalDonations,
-      pending: pendingDonations,
-      confirmed: confirmedDonations,
-      completed: completedDonations,
+      total: total[0]?.total || 0,
+      pending: pending[0]?.total || 0,
+      confirmed: confirmed[0]?.total || 0,
+      completed: completed[0]?.total || 0
     },
     contributions: {
-      total: totalContributions,
+      total: contributions[0]?.total || 0
     },
-    totalAmountReceived: totalAmount[0]?.total || 0,
-    recentDonations,
-  };
-
-  return sendSuccess(res, stats, 'NGO stats fetched');
+    totalAmountReceived: amount[0]?.total || 0,
+    recentDonations: recent
+  }, 'NGO stats fetched');
 };
-

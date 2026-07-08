@@ -1,147 +1,72 @@
 import { Request, Response } from 'express';
-import { ContributionModel } from '../models/Contribution.model';
-import { DonationModel } from '../models/Donation.model';
-import { UserModel } from '../models/User.model';
+import { query } from '../config/mysql';
 import { sendSuccess } from '../utils/response';
+
+const getPeriodSql = (period: any) => {
+  if (period === 'monthly') return 'AND c.created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")';
+  if (period === 'weekly') return 'AND c.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+  return '';
+};
+
 export const getDonorLeaderboard = async (req: Request, res: Response) => {
-  const { period = 'all' } = req.query; // all, monthly, weekly
-  let dateFilter: Date | null = null;
-  const now = new Date();
-  
-  if (period === 'monthly') {
-    dateFilter = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else if (period === 'weekly') {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek; // Sunday
-    dateFilter = new Date(now.setDate(diff));
-    dateFilter.setHours(0, 0, 0, 0);
-  }
-  const matchFilter: Record<string, unknown> = {
-    status: { $in: ['APPROVED', 'COMPLETED'] }, // Only count approved/completed contributions
-  };
-  
-  if (dateFilter) {
-    matchFilter.createdAt = { $gte: dateFilter };
-  }
-  const leaderboard = await ContributionModel.aggregate([
-    { $match: matchFilter },
-    {
-      $lookup: {
-        from: 'donations',
-        localField: 'donationId',
-        foreignField: '_id',
-        as: 'donation',
-      },
-    },
-    { $unwind: '$donation' },
-    {
-      $group: {
-        _id: '$donorId',
-        totalContributions: { $sum: 1 },
-        totalAmount: { $sum: '$donation.quantityOrAmount' },
-        completedContributions: {
-          $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] },
-        },
-        lastContributionDate: { $max: '$createdAt' },
-      },
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'donor',
-      },
-    },
-    { $unwind: '$donor' },
-    {
-      $project: {
-        donorId: '$_id',
-        donorName: '$donor.name',
-        donorEmail: '$donor.email',
-        totalContributions: 1,
-        totalAmount: 1,
-        completedContributions: 1,
-        lastContributionDate: 1,
-        _id: 0,
-      },
-    },
-    { $sort: { totalContributions: -1, totalAmount: -1 } },
-    { $limit: 100 }, // Top 100 donors
-  ]);
-  const rankedLeaderboard = leaderboard.map((donor, index) => ({
+  const { period = 'all' } = req.query;
+  const periodSql = getPeriodSql(period);
+
+  const rows = await query(`
+    SELECT 
+      c.donor_id AS donorId,
+      d.name AS donorName,
+      d.email AS donorEmail,
+      COUNT(c.id) AS totalContributions,
+      COALESCE(SUM(don.quantity_or_amount),0) AS totalAmount,
+      SUM(CASE WHEN c.status='COMPLETED' THEN 1 ELSE 0 END) AS completedContributions,
+      MAX(c.created_at) AS lastContributionDate
+    FROM contributions c
+    JOIN donors d ON c.donor_id=d.id
+    JOIN donations don ON c.donation_id=don.id
+    WHERE c.status IN ('APPROVED','COMPLETED') ${periodSql}
+    GROUP BY c.donor_id, d.name, d.email
+    ORDER BY totalContributions DESC, totalAmount DESC
+    LIMIT 100
+  `) as any[];
+
+  const leaderboard = rows.map((item, index) => ({
     rank: index + 1,
-    ...donor,
+    ...item
   }));
 
-  return sendSuccess(res, { period, leaderboard: rankedLeaderboard }, 'Leaderboard fetched');
+  return sendSuccess(res, { period, leaderboard }, 'Leaderboard fetched');
 };
+
 export const getNgoLeaderboard = async (req: Request, res: Response) => {
   const { period = 'all' } = req.query;
 
-  let dateFilter: Date | null = null;
-  const now = new Date();
-  
-  if (period === 'monthly') {
-    dateFilter = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else if (period === 'weekly') {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek;
-    dateFilter = new Date(now.setDate(diff));
-    dateFilter.setHours(0, 0, 0, 0);
-  }
+  let periodSql = '';
+  if (period === 'monthly') periodSql = 'WHERE d.created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")';
+  if (period === 'weekly') periodSql = 'WHERE d.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
 
-  const matchFilter: Record<string, unknown> = {};
-  if (dateFilter) {
-    matchFilter.createdAt = { $gte: dateFilter };
-  }
+  const rows = await query(`
+    SELECT
+      d.ngo_id AS ngoId,
+      u.name AS ngoName,
+      u.email AS ngoEmail,
+      u.contact_info AS contactInfo,
+      COUNT(d.id) AS totalDonations,
+      COALESCE(SUM(d.quantity_or_amount),0) AS totalAmount,
+      SUM(CASE WHEN d.status='COMPLETED' THEN 1 ELSE 0 END) AS completedDonations,
+      SUM(CASE WHEN d.priority='URGENT' THEN 1 ELSE 0 END) AS urgentDonations
+    FROM donations d
+    JOIN users u ON d.ngo_id=u.id
+    ${periodSql}
+    GROUP BY d.ngo_id, u.name, u.email, u.contact_info
+    ORDER BY totalDonations DESC, totalAmount DESC
+    LIMIT 50
+  `) as any[];
 
-  const leaderboard = await DonationModel.aggregate([
-    { $match: matchFilter },
-    {
-      $group: {
-        _id: '$ngoId',
-        totalDonations: { $sum: 1 },
-        totalAmount: { $sum: '$quantityOrAmount' },
-        completedDonations: {
-          $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] },
-        },
-        urgentDonations: {
-          $sum: { $cond: [{ $eq: ['$priority', 'URGENT'] }, 1, 0] },
-        },
-      },
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'ngo',
-      },
-    },
-    { $unwind: '$ngo' },
-    {
-      $project: {
-        ngoId: '$_id',
-        ngoName: '$ngo.name',
-        ngoEmail: '$ngo.email',
-        contactInfo: '$ngo.contactInfo',
-        totalDonations: 1,
-        totalAmount: 1,
-        completedDonations: 1,
-        urgentDonations: 1,
-        _id: 0,
-      },
-    },
-    { $sort: { totalDonations: -1, totalAmount: -1 } },
-    { $limit: 50 },
-  ]);
-
-  const rankedLeaderboard = leaderboard.map((ngo, index) => ({
+  const leaderboard = rows.map((item, index) => ({
     rank: index + 1,
-    ...ngo,
+    ...item
   }));
 
-  return sendSuccess(res, { period, leaderboard: rankedLeaderboard }, 'NGO leaderboard fetched');
+  return sendSuccess(res, { period, leaderboard }, 'NGO leaderboard fetched');
 };
-

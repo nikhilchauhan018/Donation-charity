@@ -1,122 +1,97 @@
 import { Request, Response } from 'express';
-import { Types } from 'mongoose';
-import { ContributionModel } from '../models/Contribution.model';
-import { DonationModel } from '../models/Donation.model';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { query, queryOne } from '../config/mysql';
 import { sendSuccess } from '../utils/response';
+
+const toInt = (value: unknown) => Number.parseInt(String(value), 10);
+
 export const trackDonation = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = toInt(req.params.id);
 
-  if (!Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ success: false, message: 'Invalid donation id' });
-  }
-
-  const donation = await DonationModel.findById(id)
-    .populate('ngoId', 'name email contactInfo')
-    .lean();
+  const donation = await queryOne<any>(
+    `SELECT d.*, u.name AS ngo_name, u.email AS ngo_email, u.contact_info AS ngo_contact_info
+     FROM donations d
+     JOIN users u ON d.ngo_id = u.id
+     WHERE d.id = ?`,
+    [id]
+  );
 
   if (!donation) {
     return res.status(404).json({ success: false, message: 'Donation not found' });
-  }
-  const contributions = await ContributionModel.find({ donationId: id })
-    .populate('donorId', 'name email contactInfo')
-    .sort({ createdAt: -1 })
-    .lean();
+  }
 
-  const tracking = {
-    donation: {
-      id: donation._id,
-      donationType: donation.donationType,
-      quantityOrAmount: donation.quantityOrAmount,
-      location: donation.location,
-      status: donation.status,
-      priority: donation.priority,
-      pickupDateTime: donation.pickupDateTime,
-      createdAt: donation.createdAt,
-      ngo: donation.ngoId,
-    },
-    contributions: contributions.map((c) => ({
-      id: c._id,
-      donor: c.donorId,
-      status: c.status,
-      scheduledPickupTime: c.scheduledPickupTime,
-      notes: c.notes,
-      createdAt: c.createdAt,
-    })),
-    summary: {
-      totalContributions: contributions.length,
-      approvedContributions: contributions.filter((c) => c.status === 'APPROVED').length,
-      completedContributions: contributions.filter((c) => c.status === 'COMPLETED').length,
-      pendingContributions: contributions.filter((c) => c.status === 'PENDING').length,
-    },
-  };
+  const contributions = await query<any>(
+    `SELECT c.*, dr.name AS donor_name, dr.email AS donor_email
+     FROM contributions c
+     JOIN donors dr ON c.donor_id = dr.id
+     WHERE c.donation_id = ?
+     ORDER BY c.created_at DESC`,
+    [id]
+  );
 
-  return sendSuccess(res, tracking, 'Donation tracking info');
+  return sendSuccess(res, { donation, contributions }, 'Donation tracking details fetched');
 };
+
 export const trackMyContributions = async (req: AuthRequest, res: Response) => {
-  const donorId = req.user!.id;
+  const donorId = toInt(req.user!.id);
   const { status } = req.query;
 
-  const filter: Record<string, unknown> = { donorId };
-  if (status) filter.status = status;
+  let sql = `
+    SELECT c.*, d.purpose, d.description, d.donation_category, d.donation_type, d.quantity_or_amount,
+           u.name AS ngo_name, u.email AS ngo_email
+    FROM contributions c
+    JOIN donations d ON c.donation_id = d.id
+    JOIN users u ON d.ngo_id = u.id
+    WHERE c.donor_id = ?
+  `;
+  const params: any[] = [donorId];
 
-  const contributions = await ContributionModel.find(filter)
-    .populate({
-      path: 'donationId',
-      populate: { path: 'ngoId', select: 'name email contactInfo' },
-    })
-    .sort({ createdAt: -1 })
-    .lean();
+  if (status) {
+    sql += ' AND c.status = ?';
+    params.push(status);
+  }
 
-  const tracking = contributions.map((c) => ({
-    contribution: {
-      id: c._id,
-      status: c.status,
-      scheduledPickupTime: c.scheduledPickupTime,
-      notes: c.notes,
-      createdAt: c.createdAt,
-    },
-    donation: c.donationId,
-  }));
+  sql += ' ORDER BY c.created_at DESC';
 
-  return sendSuccess(res, { contributions: tracking }, 'Contribution tracking');
+  const contributions = await query<any>(sql, params);
+
+  return sendSuccess(res, contributions, 'Contribution tracking fetched');
 };
+
 export const getUpcomingPickups = async (req: AuthRequest, res: Response) => {
-  const donorId = req.user!.id;
-  const now = new Date();
+  const donorId = toInt(req.user!.id);
 
-  const pickups = await ContributionModel.find({
-    donorId,
-    status: { $in: ['APPROVED', 'PENDING'] },
-    scheduledPickupTime: { $gte: now },
-  })
-    .populate({
-      path: 'donationId',
-      populate: { path: 'ngoId', select: 'name email contactInfo' },
-    })
-    .sort({ scheduledPickupTime: 1 })
-    .limit(20)
-    .lean();
+  const pickups = await query<any>(
+    `SELECT c.*, d.purpose, d.donation_category, d.donation_type, d.quantity_or_amount,
+            u.name AS ngo_name, u.email AS ngo_email
+     FROM contributions c
+     JOIN donations d ON c.donation_id = d.id
+     JOIN users u ON d.ngo_id = u.id
+     WHERE c.donor_id = ?
+       AND c.pickup_status = 'SCHEDULED'
+       AND c.pickup_scheduled_date_time >= NOW()
+     ORDER BY c.pickup_scheduled_date_time ASC`,
+    [donorId]
+  );
 
-  return sendSuccess(res, { pickups }, 'Upcoming pickups');
+  return sendSuccess(res, { count: pickups.length, pickups }, 'Upcoming pickups fetched');
 };
+
 export const getNgoUpcomingPickups = async (req: AuthRequest, res: Response) => {
-  const ngoId = req.user!.id;
-  const now = new Date();
-  const donations = await DonationModel.find({ ngoId }).select('_id');
-  const donationIds = donations.map((d) => d._id);
+  const ngoId = toInt(req.user!.id);
 
-  const pickups = await ContributionModel.find({
-    donationId: { $in: donationIds },
-    status: { $in: ['APPROVED', 'PENDING'] },
-    scheduledPickupTime: { $gte: now },
-  })
-    .populate('donorId', 'name email contactInfo')
-    .populate('donationId')
-    .sort({ scheduledPickupTime: 1 })
-    .limit(50)
-    .lean();
+  const pickups = await query<any>(
+    `SELECT c.*, dr.name AS donor_name, dr.email AS donor_email,
+            d.purpose, d.donation_category, d.donation_type, d.quantity_or_amount
+     FROM contributions c
+     JOIN donors dr ON c.donor_id = dr.id
+     JOIN donations d ON c.donation_id = d.id
+     WHERE d.ngo_id = ?
+       AND c.pickup_status = 'SCHEDULED'
+       AND c.pickup_scheduled_date_time >= NOW()
+     ORDER BY c.pickup_scheduled_date_time ASC`,
+    [ngoId]
+  );
 
-  return sendSuccess(res, { pickups }, 'Upcoming pickups for NGO');
+  return sendSuccess(res, { count: pickups.length, pickups }, 'NGO upcoming pickups fetched');
 };
-
