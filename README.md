@@ -48,7 +48,9 @@ The **Donation & Charity Portal** is a web application that bridges the gap betw
 
 <!--
   🖼️ ADD MORE SCREENSHOTS HERE (optional)
-  <img src="docs/admin-dashboard.png" alt="Dashboard screenshot" width="800" />
+  <img src="/admin-dashboard.png" alt="Dashboard screenshot" width="800" />
+  <img src="/ngo-dashboard.png" alt="Dashboard screenshot" width="800" />
+  <img src="/user-dashboard.png" alt="Dashboard screenshot" width="800" />
 -->
 
 ---
