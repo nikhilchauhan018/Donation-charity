@@ -1,7 +1,21 @@
-
-CREATE DATABASE IF NOT EXISTS donation_charity CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE donation_charity;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+USE u612148582_donatio;
+
+
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ngo_id VARCHAR(50) UNIQUE, -- Auto-generated: NGO-2025-0001 format
@@ -9,7 +23,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role ENUM('NGO') DEFAULT 'NGO' NOT NULL,
-    contact_info VARCHAR(255) NOT NULL,
+    contact_info VARCHAR(255) NOT NULL,
+
     contact_person_name VARCHAR(255),
     phone_number VARCHAR(50),
     about_ngo TEXT,
@@ -19,7 +34,8 @@ CREATE TABLE IF NOT EXISTS users (
     address TEXT NOT NULL,
     city VARCHAR(100),
     state VARCHAR(100),
-    pincode VARCHAR(20),
+    pincode VARCHAR(20),
+
     verification_status ENUM('PENDING', 'VERIFIED', 'REJECTED') DEFAULT 'PENDING',
     rejection_reason TEXT, -- Reason for rejection (if rejected)
     verified BOOLEAN DEFAULT FALSE, -- Legacy field (keep for backward compatibility)
@@ -34,7 +50,10 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_is_blocked (is_blocked),
     INDEX idx_verified (verified),
     INDEX idx_verification_status (verification_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donors (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -48,7 +67,10 @@ CREATE TABLE IF NOT EXISTS donors (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_email (email),
     INDEX idx_is_blocked (is_blocked)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS admins (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -59,7 +81,10 @@ CREATE TABLE IF NOT EXISTS admins (
     permissions JSON, -- Store permissions as JSON array: ["permission1", "permission2"]
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_email (email)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ngo_id INT NOT NULL,
@@ -67,13 +92,16 @@ CREATE TABLE IF NOT EXISTS donations (
     donation_category ENUM('CLOTHES', 'FOOD', 'MONEY'),
     purpose VARCHAR(500),
     description TEXT,
-    quantity_or_amount DECIMAL(15, 2) NOT NULL,
+    quantity_or_amount DECIMAL(15, 2) NOT NULL,
+
     location_address VARCHAR(500) NOT NULL,
     location_latitude DECIMAL(10, 8),
     location_longitude DECIMAL(11, 8),
-    use_current_location BOOLEAN DEFAULT FALSE,
+    use_current_location BOOLEAN DEFAULT FALSE,
+
     pickup_date_time DATETIME,
-    timezone VARCHAR(100), -- IANA timezone identifier
+    timezone VARCHAR(100), -- IANA timezone identifier
+
     status ENUM('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED') DEFAULT 'PENDING',
     priority ENUM('NORMAL', 'URGENT') DEFAULT 'NORMAL',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -83,7 +111,10 @@ CREATE TABLE IF NOT EXISTS donations (
     INDEX idx_donation_category (donation_category),
     INDEX idx_created_at (created_at),
     INDEX idx_location_coords (location_latitude, location_longitude)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donation_images (
     id INT AUTO_INCREMENT PRIMARY KEY,
     donation_id INT NOT NULL,
@@ -92,7 +123,10 @@ CREATE TABLE IF NOT EXISTS donation_images (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (donation_id) REFERENCES donations(id) ON DELETE CASCADE,
     INDEX idx_donation_id (donation_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donation_payment_details (
     id INT AUTO_INCREMENT PRIMARY KEY,
     donation_id INT NOT NULL UNIQUE, -- One-to-one relationship
@@ -104,7 +138,10 @@ CREATE TABLE IF NOT EXISTS donation_payment_details (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (donation_id) REFERENCES donations(id) ON DELETE CASCADE,
     INDEX idx_donation_id (donation_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donation_requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ngo_id INT NOT NULL,
@@ -112,7 +149,8 @@ CREATE TABLE IF NOT EXISTS donation_requests (
     ngo_address VARCHAR(500) NOT NULL, -- Display purpose
     donation_type ENUM('FOOD', 'FUNDS', 'CLOTHES', 'MEDICINE', 'BOOKS', 'TOYS', 'OTHER') NOT NULL,
     quantity_or_amount DECIMAL(15, 2) NOT NULL,
-    description TEXT, -- Optional description
+    description TEXT, -- Optional description
+
     bank_account_number VARCHAR(50),
     bank_name VARCHAR(255),
     ifsc_code VARCHAR(50),
@@ -125,7 +163,10 @@ CREATE TABLE IF NOT EXISTS donation_requests (
     INDEX idx_status (status),
     INDEX idx_donation_type (donation_type),
     INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donation_request_images (
     id INT AUTO_INCREMENT PRIMARY KEY,
     request_id INT NOT NULL,
@@ -134,7 +175,10 @@ CREATE TABLE IF NOT EXISTS donation_request_images (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (request_id) REFERENCES donation_requests(id) ON DELETE CASCADE,
     INDEX idx_request_id (request_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS contributions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     donation_id INT NOT NULL,
@@ -153,7 +197,10 @@ CREATE TABLE IF NOT EXISTS contributions (
     INDEX idx_donor_id (donor_id),
     INDEX idx_status (status),
     INDEX idx_pickup_status (pickup_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donation_request_contributions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     request_id INT NOT NULL,
@@ -171,7 +218,10 @@ CREATE TABLE IF NOT EXISTS donation_request_contributions (
     INDEX idx_donor_id (donor_id),
     INDEX idx_status (status),
     INDEX idx_pickup_date (pickup_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS donation_request_contribution_images (
     id INT AUTO_INCREMENT PRIMARY KEY,
     contribution_id INT NOT NULL,
@@ -180,7 +230,10 @@ CREATE TABLE IF NOT EXISTS donation_request_contribution_images (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (contribution_id) REFERENCES donation_request_contributions(id) ON DELETE CASCADE,
     INDEX idx_contribution_id (contribution_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     donation_id INT NOT NULL,
@@ -201,7 +254,11 @@ CREATE TABLE IF NOT EXISTS payments (
     INDEX idx_ngo_status (ngo_id, payment_status),
     INDEX idx_transaction_ref (transaction_reference_id),
     INDEX idx_payment_status (payment_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
 CREATE OR REPLACE VIEW donations_with_details AS
 SELECT 
     d.*,
@@ -211,7 +268,8 @@ SELECT
     (SELECT COUNT(*) FROM donation_images di WHERE di.donation_id = d.id) AS image_count,
     (SELECT COUNT(*) FROM contributions c WHERE c.donation_id = d.id) AS contribution_count
 FROM donations d
-LEFT JOIN users u ON d.ngo_id = u.id;
+LEFT JOIN users u ON d.ngo_id = u.id;
+
 CREATE OR REPLACE VIEW contributions_with_details AS
 SELECT 
     c.*,
@@ -225,7 +283,10 @@ SELECT
 FROM contributions c
 LEFT JOIN donors d ON c.donor_id = d.id
 LEFT JOIN donations don ON c.donation_id = don.id
-LEFT JOIN users u ON don.ngo_id = u.id;
+LEFT JOIN users u ON don.ngo_id = u.id;
+
+
+
 CREATE TABLE IF NOT EXISTS otp_verifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
@@ -238,16 +299,59 @@ CREATE TABLE IF NOT EXISTS otp_verifications (
     INDEX idx_otp_code (otp_code),
     INDEX idx_expires_at (expires_at),
     INDEX idx_verified (verified)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*
-USE donation_charity;
+USE donation_charity;
+
 ALTER TABLE donation_requests ADD COLUMN bank_account_number VARCHAR(50);
 ALTER TABLE donation_requests ADD COLUMN bank_name VARCHAR(255);
 ALTER TABLE donation_requests ADD COLUMN ifsc_code VARCHAR(50);
-ALTER TABLE donation_requests ADD COLUMN account_holder_name VARCHAR(255);
+ALTER TABLE donation_requests ADD COLUMN account_holder_name VARCHAR(255);
+
 CREATE INDEX idx_ngo_id ON users(ngo_id);
-CREATE INDEX idx_verification_status ON users(verification_status);
+CREATE INDEX idx_verification_status ON users(verification_status);
+
 UPDATE users 
 SET verification_status = CASE 
     WHEN verified = TRUE THEN 'VERIFIED'
@@ -262,12 +366,16 @@ SET ngo_id = CONCAT('NGO-', YEAR(created_at), '-', LPAD(
      AND u2.id <= u1.id 
      AND YEAR(u2.created_at) = YEAR(u1.created_at)), 
     4, '0'))
-WHERE u1.role = 'NGO' AND (u1.ngo_id IS NULL OR u1.ngo_id = '');
+WHERE u1.role = 'NGO' AND (u1.ngo_id IS NULL OR u1.ngo_id = '');
+
 ALTER TABLE otp_verifications 
 MODIFY COLUMN purpose ENUM('REGISTRATION', 'PASSWORD_RESET', 'EMAIL_CHANGE', 'ADMIN_REGISTRATION') 
 DEFAULT 'REGISTRATION';
 */
-USE donation_charity;
+
+
+
+
 CREATE TABLE IF NOT EXISTS email_templates (
     id INT AUTO_INCREMENT PRIMARY KEY,
     template_type VARCHAR(50) NOT NULL UNIQUE,
@@ -277,7 +385,8 @@ CREATE TABLE IF NOT EXISTS email_templates (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_template_type (template_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO email_templates (template_type, subject, body_html, is_default)
 VALUES (
     'NGO_UNBLOCK',
@@ -355,7 +464,8 @@ VALUES (
 ON DUPLICATE KEY UPDATE
     subject = VALUES(subject),
     body_html = VALUES(body_html),
-    updated_at = NOW();
+    updated_at = NOW();
+
 INSERT INTO email_templates (template_type, subject, body_html, is_default)
 VALUES (
     'NGO_BLOCK',
@@ -431,7 +541,10 @@ VALUES (
 ON DUPLICATE KEY UPDATE
     subject = VALUES(subject),
     body_html = VALUES(body_html),
-    updated_at = NOW();
+    updated_at = NOW();
+
+
+
 CREATE TABLE IF NOT EXISTS ngo_block_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ngo_id INT NOT NULL,
@@ -445,7 +558,10 @@ CREATE TABLE IF NOT EXISTS ngo_block_history (
     INDEX idx_ngo_id (ngo_id),
     INDEX idx_blocked_by (blocked_by),
     INDEX idx_blocked_at (blocked_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 CREATE TABLE IF NOT EXISTS ngo_unblock_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ngo_id INT NOT NULL,
@@ -463,7 +579,11 @@ CREATE TABLE IF NOT EXISTS ngo_unblock_history (
 
 SELECT '✅ All migrations completed successfully!' AS result;
 SELECT 'Tables created/updated: email_templates, ngo_block_history, ngo_unblock_history' AS tables_status;
-SELECT 'Templates: NGO_BLOCK ({{NGO_NAME}}, {{BLOCK_DATE}}, {{SUPPORT_EMAIL}}, {{BLOCK_REASON}}), NGO_UNBLOCK ({{NGO_NAME}}, {{UNBLOCK_DATE}}, {{SUPPORT_EMAIL}}, {{UNBLOCK_REASON}})' AS templates_info;
+SELECT 'Templates: NGO_BLOCK ({{NGO_NAME}}, {{BLOCK_DATE}}, {{SUPPORT_EMAIL}}, {{BLOCK_REASON}}), NGO_UNBLOCK ({{NGO_NAME}}, {{UNBLOCK_DATE}}, {{SUPPORT_EMAIL}}, {{UNBLOCK_REASON}})' AS templates_info;
+
+
+
+
 CREATE TABLE IF NOT EXISTS notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL, -- ID of the user (NGO, Admin, or Donor)
@@ -482,7 +602,11 @@ CREATE TABLE IF NOT EXISTS notifications (
     INDEX idx_type (type),
     INDEX idx_created_at (created_at),
     INDEX idx_user_type_read (user_id, user_type, is_read)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
 CREATE TABLE IF NOT EXISTS blogs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(500) NOT NULL,
@@ -498,7 +622,11 @@ CREATE TABLE IF NOT EXISTS blogs (
     INDEX idx_category (category),
     INDEX idx_created_at (created_at),
     FULLTEXT INDEX idx_search (title, content, excerpt)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
 CREATE TABLE IF NOT EXISTS sliders (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
