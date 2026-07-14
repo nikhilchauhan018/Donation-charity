@@ -14,23 +14,30 @@ const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 function getBrevoConfig() {
   const apiKey = process.env.BREVO_API_KEY?.trim();
-  const fromEmail = (env.smtpFrom || env.smtpUser)?.trim();
+  const rawFrom = (env.smtpFrom || env.smtpUser)?.trim();
 
   if (!apiKey) {
     throw new Error('Email service is not configured. Please set BREVO_API_KEY in .env file.');
   }
-  if (!fromEmail) {
+  if (!rawFrom) {
     throw new Error('Sender email is not configured. Please set SMTP_FROM or SMTP_USER in .env file.');
   }
 
-  return { apiKey, fromEmail };
+  // SMTP_FROM may be a plain email ("a@b.com") or "Name <a@b.com>" format.
+  // Brevo's API needs the name and email passed separately.
+  const match = rawFrom.match(/^(.*)<(.+)>$/);
+  const fromName = match ? match[1].trim() : undefined;
+  const fromEmail = (match ? match[2] : rawFrom).trim();
+
+  return { apiKey, fromEmail, fromName };
 }
 export async function sendEmail(options: EmailOptions): Promise<void> {
   let apiKey: string;
   let fromEmail: string;
+  let fromName: string | undefined;
 
   try {
-    ({ apiKey, fromEmail } = getBrevoConfig());
+    ({ apiKey, fromEmail, fromName } = getBrevoConfig());
   } catch (configError: any) {
     console.error('❌ Email Configuration Error:', configError.message);
     throw configError;
@@ -45,7 +52,7 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        sender: { email: fromEmail },
+        sender: fromName ? { name: fromName, email: fromEmail } : { email: fromEmail },
         to: [{ email: options.to }],
         subject: options.subject,
         htmlContent: options.html,
