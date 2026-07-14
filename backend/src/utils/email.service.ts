@@ -13,8 +13,8 @@ interface EmailOptions {
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 function getBrevoConfig() {
-  const apiKey = process.env.BREVO_API_KEY;
-  const fromEmail = env.smtpFrom || env.smtpUser;
+  const apiKey = process.env.BREVO_API_KEY?.trim();
+  const fromEmail = (env.smtpFrom || env.smtpUser)?.trim();
 
   if (!apiKey) {
     throw new Error('Email service is not configured. Please set BREVO_API_KEY in .env file.');
